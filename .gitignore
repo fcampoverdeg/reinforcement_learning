@@ -1,0 +1,12 @@
+__pycache__/
+.env
+.venv/
+.ipynb_checkpoints/
+*.pyc
+.DS_Store
+.envrc
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+**/site-packages/
