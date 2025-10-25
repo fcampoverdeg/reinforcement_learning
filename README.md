@@ -1,4 +1,5 @@
-# RL Capstone
+# Reinforcement Learning (RL)
+Trains an agent to act in an environment by balancing exploration and exploitation to maximize cumulative reward over time.
 
 
 ## Environment Setup
@@ -18,7 +19,7 @@ python3 -m venv .venv
 source .venv/bin/activate   # on macOS/Linux
 # .venv\Scripts\activate    # On Windows PowerShell
 ```
-You should now see `(.venv)` at the beggining of the shell prompt
+You should now see (`.venv`) at the beggining of the shell prompt
 
 ### 3. Install Dependencies
 ```bash
