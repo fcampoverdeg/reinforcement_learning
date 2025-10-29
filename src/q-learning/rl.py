@@ -139,7 +139,6 @@ Step 5: Extract the Optimal path after Training
 -> This function follows the highest Q-values at each state to extract the best path.
 -> It stops when the goal is reached or no valid next moves are available
 -> The visited set prevents cycles.
-
 '''
 
 def get_optimal_path (Q, start, goal, actions, maze, max_steps=200):
@@ -184,7 +183,6 @@ Step 6: Visualize the Maze, Robot Path, Start and Goal
 -> The maze and path are visualized using a calmig green color palette.
 -> The start and goal positions are visually highlighted.
 -> The learned path is drawn clearly to demonstrate the agent's solution.
-
 '''
 
 def plot_maze_with_path(path):
