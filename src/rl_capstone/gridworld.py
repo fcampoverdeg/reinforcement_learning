@@ -23,12 +23,12 @@ MOVES = {
 @dataclass
 class WorldSettings:
     '''
-    GridWorldConfig, includes variables from the environment, like: width, height, start (x,     y), goal (x, y), pits (x, y), walls, (x, y), wind probability, step's reward, goal's         reward, pit's reward, and seed.
+    WorldSettings, includes variables from the environment, like: width, height, start (x,     y), goal (x, y), pits (x, y), walls, (x, y), wind probability, step's reward, goal's         reward, pit's reward, and seed.
     '''
-    width: int = 6
-    height: int = 6
-    start: tuple = (5, 0)
-    goal: tuple = (0, 5)
+    width: int = 11
+    height: int = 11
+    start: tuple = (10, 0)
+    goal: tuple = (0, 10)
     pits: tuple = ((2,2),)
     walls: tuple = ((1, 1), (1, 2), (3, 3))
     wind_chance: float = 0.1       # change to move in a random direction
@@ -140,18 +140,46 @@ class GridWorld:
         cmap = ListedColormap(colors)
         norm = BoundaryNorm([0, 1, 2, 3, 4], cmap.N)
     
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(9, 9))
+        
         # The origin='upper' keeps (0,0) at top-left (as in your grid logic)
         ax.imshow(grid, cmap=cmap, norm=norm, origin='upper',
                   extent=[0, self.cols, 0, self.rows], interpolation="none")
     
-        # Draw grid lines between cells
-        ax.set_xticks(np.arange(0, self.cols + 1, 1))
-        ax.set_yticks(np.arange(0, self.rows + 1, 1))
-        ax.grid(True, which='both', color='k', linewidth=0.4, alpha=0.15)
+        # Grid lines at cell edges (MAJOR ticks)
+        ax.set_xticks(np.arange(0, self.cols + 1, 1), minor=False)
+        ax.set_yticks(np.arange(0, self.rows + 1, 1), minor=False)
+        ax.grid(True, which='major', color='k', linewidth=0.4, alpha=0.15)
         ax.set_xlim(0, self.cols)
         ax.set_ylim(0, self.rows)
         ax.set_aspect('equal')
+
+        # Hide MAJOR tick labels (keep only grid lines)
+        ax.tick_params(axis='both', which='major', labelbottom=False, labelleft=False, length=0)
+
+        # Centered labels as MINOR ticks at cell centers
+        x_centers = np.arange(0.5, self.cols, 0.5)     # 0.5, 1.5, 2.5, ...
+        y_centers = np.arange(0.5, self.rows, 0.5)
+
+        ax.set_xticks(x_centers, minor=True)
+        ax.set_yticks(y_centers, minor=True)
+
+        # Build pattern: blank - 0 - blank - 1 - blank - 2 - ...
+        def interleaved_labels(n):
+            labels=[]
+            for k in range(n):
+                if k % 2 == 0:
+                    labels.append(str(k // 2))  # numeric label
+                else:
+                     labels.append("")   # blank space
+
+            return labels
+
+        x_minor_labels = interleaved_labels(len(x_centers))
+        y_minor_labels = interleaved_labels(len(y_centers)) 
+
+        ax.set_xticklabels(x_minor_labels, minor=True)
+        ax.set_yticklabels(y_minor_labels, minor=True)
     
         # Start marker
         sr, sc = self.settings.start
@@ -163,6 +191,11 @@ class GridWorld:
             ar, ac = self.position
             ax.scatter(ac + 0.5, self.rows - ar - 0.5, s=220, marker='o',
                        facecolors='#1565c0', edgecolors='black', label='Agent', zorder=6)
+            
+        # Goal marker
+        gr, gc = self.settings.goal
+        ax.scatter(gc + 0.5, self.rows - gr - 0.5, s=180, marker='*',
+                       facecolors="#66bb6a", edgecolors='black', label="Goal", zorder=6)
     
         # Path (centered)
         if path is not None and len(path) > 1:
@@ -172,8 +205,8 @@ class GridWorld:
             ax.plot(xs, ys, linewidth=3.5, color='#60b37a',
                     label='Learned Path', zorder=4)
     
-        ax.set_title(title, fontsize=14, pad=10)
-        ax.legend(loc='upper right', frameon=True, fontsize=9)
+        ax.set_title(title, fontsize=20, pad=10)
+        ax.legend(bbox_to_anchor=(1.02, 1), borderaxespad=0., labelspacing=1, loc='upper left', frameon=True, fontsize=15)
         plt.tight_layout()
         plt.show()
     
