@@ -220,17 +220,6 @@ class EpisodeLog:
         self.lengths.append(L)
 
 
-def moving_average(x: Iterable[float], k: int) -> np.ndarray:
-    """
-    Simple centered moving average with window k (odd -> centered exactly).
-    """
-    x = np.asarray(list(x), dtype=float)
-    if k <= 1 or k > len(x):
-        return x
-    w = np.ones(k) / k
-    return np.convolve(x, w, mode="same")
-
-
 def plot_learning_curve(returns: List[float], window: int = 21,
                         title: str = "Learning Curve") -> None:
     """
@@ -245,6 +234,126 @@ def plot_learning_curve(returns: List[float], window: int = 21,
     plt.ylabel("Return")
     plt.title(title)
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# -----------------------------
+# GridWorld-specific helpers
+# -----------------------------
+
+def greedy_action(Q: np.ndarray, s: int, rng=None) -> int:
+    """
+    Greedy action with uniform tie-breaking over argmax_a Q[s, a].
+    """
+    row = Q[s]
+    maxv = np.max(row)
+    choices = np.flatnonzero(np.isclose(row, maxv))
+    if rng is None:
+        return int(np.random.choice(choices))
+    return int(rng.choice(choices))
+
+def run_greedy_episode(env, Q: np.ndarray, max_steps: int = 1000):
+    """
+    Roll out one greedy episode using Q on the given env.
+
+    Returns
+    -------
+    G : float
+        Cumulative return.
+    traj : List[int]
+        List of visited states (indices).
+    """
+    s = env.reset()
+    G = 0.0
+    traj = [s]
+    for _ in range(max_steps):
+        a = greedy_action(Q, s)
+        s2, r, done, _ = env.step(a)
+        G += r
+        traj.append(s2)
+        s = s2
+        if done:
+            break
+    return G, traj
+
+
+def rolling(x, k: int = 25) -> np.ndarray:
+    """
+    Rolling average similar to your 'rolling' helper:
+    - uses 'valid' convolution
+    - pads the front with the first smoothed value.
+
+    This keeps the length equal to len(x).
+    """
+    x = np.asarray(x, dtype=float)
+    if len(x) == 0:
+        return np.array([])
+    k = max(1, min(k, len(x)))
+    y = np.convolve(x, np.ones(k)/k, mode="valid")
+    pad = np.full(k-1, y[0])
+    return np.concatenate([pad, y])
+
+
+def idx_traj_to_rc_path(env, traj_idx):
+    """
+    Convert a trajectory of state indices into (row, col) positions
+    using the GridWorld's internal _to_pos(s) helper.
+    """
+    return [env._to_pos(s) for s in traj_idx]
+
+
+def value_grid(env, Q: np.ndarray) -> np.ndarray:
+    """
+    Map V(s) = max_a Q(s,a) onto an (rows x cols) grid.
+    """
+    V = np.max(Q, axis=1)
+    G = np.zeros((env.rows, env.cols))
+    for s in range(env.num_states):
+        r, c = env._to_pos(s)
+        G[r, c] = V[s]
+    return G
+
+
+def plot_value_and_policy(env, Q: np.ndarray,
+                          title: str = "Value & Policy (Top-Left Origin)") -> None:
+    """
+    Visualize value function as a heatmap + greedy policy arrows.
+    Assumes:
+      - env._to_pos(s) -> (row, col)
+      - env._is_wall((r,c)) and env.is_terminal((r,c)) exist (for masking).
+    """
+    H, W = env.rows, env.cols
+    Vg = value_grid(env, Q)
+
+    plt.figure(figsize=(6.6, 6.6))
+    plt.imshow(Vg, origin='upper')
+    plt.colorbar(label="V(s) = maxₐ Q(s,a)")
+    plt.title(title)
+    plt.xticks(range(W))
+    plt.yticks(range(H))
+
+    # arrows (0:Up, 1:Right, 2:Down, 3:Left)
+    action_to_vec = {0:(-1,0), 1:(0,1), 2:(1,0), 3:(0,-1)}
+    X, Y, U, V = [], [], [], []
+    for s in range(env.num_states):
+        r, c = env._to_pos(s)
+
+        # Skip walls/terminals if your env supports these checks
+        if hasattr(env, "_is_wall") and env._is_wall((r, c)):
+            continue
+        if hasattr(env, "is_terminal") and env.is_terminal((r, c)):
+            continue
+
+        a = int(np.argmax(Q[s]))
+        dr, dc = action_to_vec[a]
+        X.append(c)
+        Y.append(r)
+        U.append(dc)
+        V.append(dr)
+
+    plt.quiver(X, Y, U, V, scale=1, angles='xy', scale_units='xy', width=0.004)
+    plt.grid(False)
     plt.tight_layout()
     plt.show()
 

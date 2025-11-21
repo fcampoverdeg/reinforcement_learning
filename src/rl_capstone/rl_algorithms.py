@@ -195,7 +195,7 @@ def _run_greedy_episode(env, Q: np.ndarray, max_steps: int = 1000):
     
 ##################################### Q-Learning #######################################
 
-def q_learning_with_logs(env, cfg: TrainConfig, logcfg: LogConfig):
+def q_learning_train_with_logs(env, cfg: TrainConfig, logcfg: LogConfig):
     import rl_capstone.utils as U  # local import avoids circulars on some setups
 
     rng = U.set_seed(cfg.seed)
@@ -327,7 +327,7 @@ def sarsa_train_with_logs(env, cfg: TrainConfig, logcfg: LogConfig):
 
 ##################################### DYNA-Q #######################################
 
-def dyna_q_with_logs(env, cfg: TrainConfig, logcfg: LogConfig) -> Tuple[np.ndarray, Dict[str, Any]]:
+def dyna_q_train_with_logs(env, cfg: TrainConfig, logcfg: LogConfig) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Dyna-Q:
       - real TD updates (Q-learning target)
