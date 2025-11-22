@@ -13,7 +13,7 @@ This file exposes:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Tuple, Dict, Any, Iterable, Optional
 
 import numpy as np

@@ -356,15 +356,3 @@ def plot_value_and_policy(env, Q: np.ndarray,
     plt.grid(False)
     plt.tight_layout()
     plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
