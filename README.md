@@ -28,6 +28,12 @@ pip install -r requirements.txt
 # In case 'requirements.txt' is not available
 pip install numpy scipy matplotlib jupyterlab ipykernel pandas tqdm \
             black ruff pytest pytest-cov mypy gymnasium pygame
+
+# Install packages in editable mode
+pip install -e
+
+# Run Unit Tests
+pytest -q
 ```
 
 ### 4. Register Jupyter Kernel
