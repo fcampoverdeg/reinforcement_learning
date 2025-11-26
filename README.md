@@ -138,5 +138,5 @@ All findings are documented in the **Results notebook**
 ---
 
 ## Author
-Felipe Campoverde
+Felipe Campoverde  
 Virginia Tech - RL Capstone Research Project
