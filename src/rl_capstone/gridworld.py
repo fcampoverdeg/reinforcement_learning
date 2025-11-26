@@ -550,17 +550,4 @@ class GridWorld:
         int
         """
         return self._to_index(self.state)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
             
