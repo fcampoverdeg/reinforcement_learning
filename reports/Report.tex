@@ -1,0 +1,362 @@
+\documentclass[11pt]{article}
+
+% Page layout similar to a conference paper
+\usepackage[margin=1in]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{float}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+
+    {\Huge \textbf{Model-Free vs. Model-Based Reinforcement Learning\\[0.3cm]
+    in a Stochastic GridWorld}}\\[1.5cm]
+
+    {\Large Felipe Campoverde}\\[0.3cm]
+    {\large Virginia Tech}\\[0.3cm]
+    {\large \texttt{fcampoverdeg@vt.edu}}\\[2cm]
+
+    {\large CS 4824 — Machine Learning}\\[0.2cm]
+    {\large Final Project Report}\\[0.2cm]
+    {\large Fall 2025}\\[3cm]
+
+    \vfill
+\end{titlepage}
+
+
+\begin{abstract}
+We investigate how reinforcement learning (RL) agents learn in a stochastic 11x11 GridWorld environment using three methods: Q-Learning, SARSA, and the model-based Dyna-Q algorithm. The study examines sample efficiency, robustness to stochastic transitions, planning depth sensitivity, and seed-dependent variability. Experiments include baseline learning curves, planning sweeps over the number of simulated updates $K$, wind-induced stochasticity, and a layout-shift robustness test. Results show that Dyna-Q significantly accelerates convergence through planning, while model-free methods demonstrate greater stability under environmental noise. Despite differences in learning speed, all algorithms achieve similar final greedy-policy returns. This work highlights the trade-offs between model-free stability and model-based speed, and provides a reproducible benchmark for analyzing classical RL algorithms under stochasticity.
+\end{abstract}
+
+
+\section{Introduction}
+
+GridWorld environments provide an interpretable and computationally lightweight testbed for analyzing the behavior of reinforcement learning algorithms. In stochastic settings---where transitions can randomly deviate due to wind or noise---learning dynamics differ substantially across algorithms. Understanding these differences is important for diagnosing stability issues, assessing sample efficiency, and motivating more advanced model-based approaches.
+
+This project focuses on comparing model-free temporal-difference methods (Q-Learning and SARSA) with the model-based Dyna-Q algorithm in a stochastic GridWorld. Prior studies typically analyze these methods qualitatively, but few perform a systematic comparison including: (1) planning-step sweeps, (2) seed sensitivity, (3) robustness to environmental noise, and (4) layout-shift adaptation.
+
+\textbf{Contributions.}
+This work provides:
+\begin{itemize}
+    \item A unified implementation of Q-Learning, SARSA, and Dyna-Q with standardized logging and evaluation.
+    \item A planning-depth sweep ($K = \{0, 5, 10, 20, 50\}$) revealing how simulated updates affect convergence.
+    \item A robustness analysis across wind disturbances and layout shifts.
+    \item A seed-sensitivity study showing how randomness affects returns, steps, and Dyna-Q's internal model.
+\end{itemize}
+
+All code, plots, and configurations are publicly available in the project's GitHub repository:
+\url{https://github.com/fcampoverdeg/reinforcement_learning}.
+
+\newpage
+
+\section{Background and Related Work}
+
+Reinforcement learning formalizes sequential decision-making as a Markov Decision Process (MDP) consisting of states $S$, actions $A$, transitions $P$, and rewards $R$. Temporal-difference (TD) learning methods update value estimates using bootstrapped predictions.
+
+\subsection{Q-Learning}
+
+Q-Learning~\cite{watkins1989qlearning} is an off-policy TD control method. Its update rule is:
+\[
+Q(s,a) \leftarrow Q(s,a) + \alpha \left[r + \gamma \max_{a'} Q(s',a') - Q(s,a)\right].
+\]
+
+By learning from the greedy target $\max_{a'}Q(s',a')$ regardless of the behavior policy, Q-Learning can learn an optimal policy while following an $\epsilon$-greedy exploratory policy.
+
+\subsection{SARSA}
+
+SARSA~\cite{rummery1994sarsa} is an on-policy method that evaluates and improves the same behavior policy. Its update rule is:
+\[
+Q(s,a) \leftarrow Q(s,a) + \alpha \left[r + \gamma Q(s', a') - Q(s,a)\right],
+\]
+where $(s,a,r,s',a')$ is the transition experienced under the current policy. This tends to produce more conservative policies in stochastic environments, because exploratory actions are directly reflected in the updates.
+
+\subsection{Dyna-Q}
+
+Dyna-Q~\cite{sutton1990integrated} combines direct learning and planning. After each real transition $(s,a,r,s')$, a learned model $\hat{P}, \hat{R}$ is updated and $K$ simulated updates are performed from stored transitions.
+
+Conceptually, Dyna-Q augments real samples with model-generated samples, thereby increasing the number of effective updates per environment interaction. Prior work shows Dyna-Q improves sample efficiency~\cite{sutton2018reinforcement} but may be sensitive to model errors, especially under high stochasticity.
+
+
+\section{Methods}
+
+\subsection{Environment}
+
+The experiments use a custom 11x11 stochastic GridWorld featuring:
+\begin{itemize}
+    \item Walls (gray) that are impassable.
+    \item Pits with terminal reward $-1$.
+    \item An absorbing goal state with reward $+1$.
+    \item A small step cost of $-0.01$ on non-terminal moves.
+    \item Wind with probability $0.1$, randomly pushing the agent off its intended path.
+\end{itemize}
+
+The environment's stochasticity influences exploration trajectories, learned models in Dyna-Q, and the consistency of episode lengths. This setup is designed to expose differences between on-policy, off-policy, and model-based methods under uncertainty.
+
+\subsection{Training Configuration}
+
+All algorithms use:
+\begin{itemize}
+    \item $\epsilon$-greedy exploration with exponential decay over episodes.
+    \item Learning rate $\alpha$ and discount factor $\gamma$ defined in a shared configuration structure (\texttt{TrainConfig}).
+    \item Logging of episode returns, steps, and Q-table snapshots every fixed number of episodes.
+\end{itemize}
+
+Random seeds control:
+\begin{itemize}
+    \item Transition outcomes (wind events and other stochastic transitions).
+    \item Random actions during $\epsilon$-greedy exploration and tie-breaking.
+    \item The order of Dyna-Q's sampled transitions during planning.
+    \item The trajectory and episode length indirectly via stochasticity.
+\end{itemize}
+
+\subsection{Planning Sweep for Dyna-Q}
+
+For Dyna-Q, the number of planning steps $K$ is varied to study the impact of model-based updates:
+\[
+K \in \{0, 5, 10, 20, 50\}.
+\]
+When $K = 0$, Dyna-Q reduces to a purely model-free algorithm with the same update as Q-Learning but still maintaining a (unused) model. For larger $K$, the algorithm performs more simulated updates per real step, effectively multiplying the rate at which Q-values are updated.
+
+
+\section{Experimental Design}
+
+\subsection{Baseline Experiments}
+
+Each algorithm is trained for a fixed number of episodes (e.g., 700--1000), and the following metrics are recorded:
+\begin{itemize}
+    \item Average return per episode.
+    \item Number of steps until termination (goal or pit).
+    \item Value heatmaps of the learned $Q$-table.
+    \item Greedy policy evaluations over 30 rollouts for each snapshot.
+\end{itemize}
+
+These baselines illustrate the learning dynamics in the original GridWorld with moderate wind.
+
+\subsection{Robustness Tests}
+
+To probe robustness, two additional perturbations are introduced:
+\begin{enumerate}
+    \item \textbf{Windy environment:} the probability and/or effect of wind is increased, making transitions more stochastic.
+    \item \textbf{Layout shift:} additional walls and pits are added to the GridWorld, altering shortest paths and introducing new traps.
+\end{enumerate}
+
+For each perturbed environment, all three algorithms are retrained with the same hyperparameters (or initialized from the original policy, depending on the experiment) to measure adaptability.
+
+\subsection{Evaluation Protocol}
+
+Policies are evaluated over 30 episodes at selected checkpoints. This sample size provides a reasonable compromise: it reduces the variance of performance estimates while remaining computationally cheap. Although stochasticity and seed variance still introduce noise, the mean return and mean steps converge sufficiently to allow clear comparison across algorithms and planning depths.
+
+
+\section{Results}
+\label{sec:results}
+
+This section presents learning curves, robustness experiments, and seed-stability results for Q-Learning, SARSA, and Dyna-Q in the stochastic GridWorld and its variants.
+
+
+\subsection{Per-Algorithm Learning Dynamics}
+
+\paragraph{Q-Learning.}
+Figure~\ref{fig:qlearning_return} shows the episodic return for Q-Learning, along with a rolling average. Despite significant noise early in training (due to off-policy updates under stochastic transitions), the agent gradually converges to a high-return policy. Episode length (Figure~\ref{fig:qlearning_steps}) decreases over time, indicating that the learned policy reaches the goal more quickly and avoids pits.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/q_learning/qlearning_return.png}
+        \caption{Q-Learning: episodic return in the baseline stochastic GridWorld (with rolling average).}
+        \label{fig:qlearning_return}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/q_learning/qlearning_steps.png}
+        \caption{Q-Learning: episode length (steps to termination) in the baseline stochastic GridWorld.}
+        \label{fig:qlearning_steps}
+    \end{minipage}
+\end{figure}
+
+\paragraph{SARSA.}
+SARSA exhibits smoother learning dynamics (Figure~\ref{fig:sarsa_return}), with smaller spikes in return and a more gradual reduction in episode length (Figure~\ref{fig:sarsa_steps}). This is consistent with on-policy learning, where exploratory actions are explicitly accounted for in the update, leading to more conservative, risk-aware policies in the presence of wind.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/sarsa/sarsa_return.png}
+        \caption{SARSA: episodic return in the baseline stochastic GridWorld.}
+        \label{fig:sarsa_return}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/sarsa/sarsa_steps.png}
+        \caption{SARSA: episode length (steps to termination) in the baseline stochastic GridWorld.}
+        \label{fig:sarsa_steps}
+    \end{minipage}
+\end{figure}
+
+\paragraph{Dyna-Q.}
+Dyna-Q learns much faster initially (Figure~\ref{fig:dynaq_return}), due to additional planning updates per real transition. Episode lengths also drop quickly (Figure~\ref{fig:dynaq_steps}). However, transient instability is visible: when the learned model does not fully capture the stochastic dynamics, simulated updates can temporarily push Q-values in suboptimal directions.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/dyna_q/dynaq_return.png}
+        \caption{Dyna-Q: episodic return in the baseline stochastic GridWorld.}
+        \label{fig:dynaq_return}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/dyna_q/dynaq_steps.png}
+        \caption{Dyna-Q: episode length (steps to termination) in the baseline stochastic GridWorld.}
+        \label{fig:dynaq_steps}
+    \end{minipage}
+\end{figure}
+
+
+% \subsection{Comparative Learning on the Baseline Environment}
+
+% To compare all three algorithms directly, Figure~\ref{fig:baseline_returns} shows their returns on the same baseline environment, using the shared training and logging configuration. Dyna-Q reaches near-optimal performance in substantially fewer episodes, while Q-Learning and SARSA converge more slowly but with smoother curves. Figure~\ref{fig:baseline_steps} shows that episode lengths follow a similar pattern.
+
+% % \begin{figure}[H]
+% %     \centering
+% %     \begin{minipage}{0.48\linewidth}
+% %         \centering
+% %         \includegraphics[width=\linewidth]{figs/baseline/baseline_returns.png}
+% %         \caption{Baseline environment: return per episode (rolling average) for Q-Learning, SARSA, and Dyna-Q.}
+% %         \label{fig:baseline_returns}
+% %     \end{minipage}\hfill
+% %     \begin{minipage}{0.48\linewidth}
+% %         \centering
+% %         \includegraphics[width=\linewidth]{figs/baseline/baseline_steps.png}
+% %         \caption{Baseline environment: episode length (rolling average) for Q-Learning, SARSA, and Dyna-Q.}
+% %         \label{fig:baseline_steps}
+% %     \end{minipage}
+% % \end{figure}
+
+
+\subsection{Planning Step Analysis}
+
+For Dyna-Q, we sweep the number of planning steps $K \in \{0, 5, 10, 20, 50\}$. Figure~\ref{fig:ksweep_return} shows that small to moderate values of $K$ sharply accelerate convergence, whereas very large $K$ yield diminishing returns and occasional instability. This supports the intuition that there is a practical range of planning depth where simulated updates are helpful without over-amplifying model errors.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figs/k_sweeping/ksweep_return.png}
+    \caption{Dyna-Q planning sweep: effect of planning steps $K$ on episodic return.}
+    \label{fig:ksweep_return}
+\end{figure}
+
+
+\subsection{Robustness to Wind}
+
+To test robustness to increased transition noise, we train all algorithms on a ``windy'' version of the GridWorld, where the wind probability is higher. Figure~\ref{fig:windy_returns} shows the return curves, and Figure~\ref{fig:windy_steps} shows the episode lengths.
+
+SARSA is the most stable in this setting, maintaining relatively smooth learning curves and avoiding catastrophic failures. Q-Learning exhibits larger variance, overestimating risky paths that are frequently disrupted by wind. Dyna-Q still converges quickly, but is more sensitive to model mismatch, as planning uses a model that cannot fully capture the heightened randomness.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/robustness/windy/windy_returns.png}
+        \caption{Windy environment: return per episode (rolling average) for all algorithms.}
+        \label{fig:windy_returns}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/robustness/windy/windy_steps.png}
+        \caption{Windy environment: episode length (rolling average) for all algorithms.}
+        \label{fig:windy_steps}
+    \end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{figs/robustness/windy/windy_seed_stability.png}
+    \caption{Seed stability on the windy environment: final return mean $\pm$ standard deviation across seeds for each algorithm.}
+    \label{fig:windy_seed_stability}
+\end{figure}
+
+
+
+\subsection{Robustness to Layout Shift}
+
+We next modify the GridWorld layout by adding extra walls and pits, tightening corridors and introducing new local traps while preserving reachability of the goal. Zero-shot evaluation of baseline-trained policies reveals an immediate drop in performance, as expected, but all algorithms can adapt when retrained on the new layout.
+
+Figure~\ref{fig:layout_returns} and Figure~\ref{fig:layout_steps} show learning curves when training directly on the layout-shifted environment. Dyna-Q again converges faster, while Q-Learning and SARSA adapt more slowly but steadily.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/robustness/layout/layout_returns.png}
+        \caption{Layout-shifted environment: return per episode (rolling average) for all algorithms.}
+        \label{fig:layout_returns}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figs/robustness/layout/layout_steps.png}
+        \caption{Layout-shifted environment: episode length (rolling average) for all algorithms.}
+        \label{fig:layout_steps}
+    \end{minipage}
+\end{figure}
+
+
+\subsection{Seed Stability under Layout Shift}
+
+Finally, we examine seed stability on the layout-shifted environment by training each algorithm across multiple random seeds and computing the mean and standard deviation of final returns over the last training episodes. Figure~\ref{fig:layout_seed_stability} summarizes the results.
+
+Dyna-Q achieves the highest mean final return but also shows slightly higher variability across seeds, consistent with its sensitivity to early model errors. SARSA yields the most stable (lowest-variance) performance, while Q-Learning lies in between, reflecting its off-policy nature.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{figs/robustness/layout/layout_seed_stability.png}
+    \caption{Seed stability on the layout-shifted environment: final return mean $\pm$ standard deviation across seeds for each algorithm.}
+    \label{fig:layout_seed_stability}
+\end{figure}
+
+
+\section{Discussion}
+
+The results highlight fundamental trade-offs in RL under stochasticity:
+\begin{itemize}
+    \item \textbf{Model-based gain:} Planning dramatically accelerates early learning by providing additional updates from a learned model.
+    \item \textbf{Model-free robustness:} SARSA's on-policy nature provides more stability in noisy or risky environments, at the cost of slower convergence.
+    \item \textbf{Model imperfection:} Dyna-Q's learned model can amplify early transition errors under high stochasticity, particularly when $K$ is large.
+    \item \textbf{Policy similarity:} Despite different convergence profiles, final greedy policies converge to similar quality in this tabular GridWorld.
+\end{itemize}
+
+Limitations of this work include the use of a single tabular environment, fixed hyperparameters, and a simple last-visit model for Dyna-Q. Additionally, the analysis does not consider function approximation or continuous state spaces, where model errors and instability can be more severe.
+
+\newpage
+
+\section{Conclusion and Future Work}
+
+This project provides a reproducible comparison of three classical RL algorithms under stochastic conditions. Planning improves sample efficiency but introduces sensitivity to model inaccuracies. Model-free algorithms remain more stable but require more episodes to converge.
+
+Future work includes:
+\begin{itemize}
+    \item Implementing prioritized sweeping and comparing it to vanilla Dyna-Q.
+    \item Exploring Dyna-Q++ and uncertainty-aware planning mechanisms.
+    \item Scaling to larger or continuous environments where function approximation is required.
+    \item Adding real-time visualization tools for inspecting trajectories, value functions, and model errors during training.
+\end{itemize}
+
+These extensions would further clarify when and how model-based methods should be deployed in practice.
+
+\newpage
+
+\section*{Acknowledgments}
+
+This project was completed for CS 4824: Machine Learning at Virginia Tech. I thank the course staff and classmates for feedback throughout the project.
+
+\bibliographystyle{unsrt}
+
+\bibliography{references}
+
+\end{document}

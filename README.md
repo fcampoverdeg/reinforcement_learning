@@ -62,7 +62,11 @@ reinforcement_learning/
 │   ├── q_tables/           # Saved NumPy Q-tables
 │   └── robustness/         # npz files for seed stability experiments
 │
-├── reports/                # PDF or markdown summary (*Not implemented yet*)
+├── reports/                
+│   ├── figs/               # Stores the result's graphs
+│   ├── Report.tex/         # LaTex file
+│   └── Report.pdf/         # PDF or markdown summary
+│
 ├── requirements.txt
 └── README.md
 
